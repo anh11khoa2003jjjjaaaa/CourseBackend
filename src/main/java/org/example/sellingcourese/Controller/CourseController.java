@@ -15,7 +15,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin("https://course-ui.vercel.app")
 @RequestMapping("/public/courses")
 public class CourseController {
 

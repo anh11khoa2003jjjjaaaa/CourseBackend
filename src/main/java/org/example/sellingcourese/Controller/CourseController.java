@@ -6,13 +6,17 @@ import org.example.sellingcourese.Service.CourseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @CrossOrigin("https://course-ui.vercel.app")
@@ -29,7 +33,7 @@ public class CourseController {
     }
 
     @PostMapping(consumes = {"multipart/form-data"})
-    public ResponseEntity<Course> addCourse(
+    public ResponseEntity<?> addCourse(
             @RequestParam("title") String title,
             @RequestParam("description") String description,
             @RequestParam("price") BigDecimal price,
@@ -38,22 +42,60 @@ public class CourseController {
             @RequestParam(value = "thumbnail", required = false) MultipartFile thumbnail,
             @RequestParam(value = "video", required = false) MultipartFile video) {
 
-        // Log các file nhận được
-        if (thumbnail != null) {
-            System.out.println("Received thumbnail: " + thumbnail.getOriginalFilename());
-        } else {
-            System.out.println("No thumbnail file received");
-        }
+        try {
+            // Kiểm tra dữ liệu đầu vào
+            if (title == null || title.isBlank()) {
+                return ResponseEntity.badRequest().body(createErrorResponse("Title is required."));
+            }
+            if (description == null || description.isBlank()) {
+                return ResponseEntity.badRequest().body(createErrorResponse("Description is required."));
+            }
+            if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+                return ResponseEntity.badRequest().body(createErrorResponse("Price must be greater than zero."));
+            }
+            if (teacherId == null) {
+                return ResponseEntity.badRequest().body(createErrorResponse("Teacher ID is required."));
+            }
+            if (categoryId == null) {
+                return ResponseEntity.badRequest().body(createErrorResponse("Category ID is required."));
+            }
 
-        if (video != null) {
-            System.out.println("Received video: " + video.getOriginalFilename());
-        } else {
-            System.out.println("No video file received");
-        }
+            // Log thông tin file upload (nếu có)
+            if (thumbnail != null) {
+                System.out.println("Received thumbnail: " + thumbnail.getOriginalFilename());
+            } else {
+                System.out.println("No thumbnail file received");
+            }
 
-        Course course = courseService.addCourseWithFiles(title, description, price, teacherId, categoryId, thumbnail, video);
-        return ResponseEntity.ok(course);
+            if (video != null) {
+                System.out.println("Received video: " + video.getOriginalFilename());
+            } else {
+                System.out.println("No video file received");
+            }
+
+            // Gọi service để thêm khóa học
+            Course course = courseService.addCourseWithFiles(title, description, price, teacherId, categoryId, thumbnail, video);
+            return ResponseEntity.ok(course);
+
+        } catch (RuntimeException e) {
+            // Lỗi logic ứng dụng (vd: upload thất bại, lưu database thất bại)
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("An error occurred: " + e.getMessage()));
+        } catch (Exception e) {
+            // Lỗi không mong muốn
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Unexpected error occurred: " + e.getMessage()));
+        }
     }
+
+    // Hàm tạo lỗi chi tiết
+    private Map<String, Object> createErrorResponse(String message) {
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("timestamp", LocalDateTime.now());
+        errorResponse.put("error", message);
+        return errorResponse;
+    }
+
 
     // Update an existing course
     @PutMapping(value = "/{id}", consumes = {"multipart/form-data"})

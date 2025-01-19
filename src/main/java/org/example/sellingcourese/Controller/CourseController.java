@@ -148,5 +148,6 @@ public class CourseController {
     public ResponseEntity<List<Course>> getApprovedCourses() {
         List<Course> approvedCourses = courseService.getCoursesByStatus(0);
         return ResponseEntity.ok(approvedCourses);
+
     }
 }

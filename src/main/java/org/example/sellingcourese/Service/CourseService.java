@@ -184,7 +184,7 @@ public class CourseService {
                 try {
                     thumbnailUrl = saveMultipartFileToDrive(thumbnail, "image/jpeg");
                 } catch (Exception e) {
-                    throw new RuntimeException("Failed to upload thumbnail: " + e.getMessage(), e);
+                    throw new RuntimeException("Failed to upload thumbnai: " + e.getMessage(), e);
                 }
             }
 

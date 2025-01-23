@@ -49,17 +49,41 @@ public class CourseService {
 
     @Autowired
     private OrderDetailRepository orderItemRepository;
-
     // Get all courses
     public List<Course> getAllCourses() {
         return courseRepository.findAll();
     }
-
-    // Helper method to get path to Google credentials
+    // Helper method to get Google credentials path
     private String getPathToGoogleCredentials() {
-        String currentDirectory = System.getProperty("user.dir");
-        Path filePath = Paths.get(currentDirectory, CREDENTIALS_FILE_PATH );
-        return filePath.toString();
+        try {
+            String currentDirectory = System.getProperty("user.dir");
+            Path filePath = Paths.get(currentDirectory, CREDENTIALS_FILE_PATH);
+            return filePath.toString();
+        } catch (Exception e) {
+            log.error("Failed to resolve Google credentials path: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error resolving credentials path", e);
+        }
+    }
+
+    // Create Google Drive service
+    private Drive createDriveService() {
+        try {
+            String credentialsPath = getPathToGoogleCredentials();
+            GoogleCredential credential = GoogleCredential.fromStream(new FileInputStream(credentialsPath))
+                    .createScoped(Collections.singleton(DriveScopes.DRIVE));
+
+            return new Drive.Builder(
+                    GoogleNetHttpTransport.newTrustedTransport(),
+                    JSON_FACTORY,
+                    credential
+            ).setApplicationName("SellingCourse").build();
+        } catch (IOException e) {
+            log.error("Failed to create Google Drive service due to IO error: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create Google Drive service", e);
+        } catch (GeneralSecurityException e) {
+            log.error("Security error while creating Google Drive service: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Security error during Google Drive initialization", e);
+        }
     }
 
     // Upload file to Google Drive
@@ -75,7 +99,7 @@ public class CourseService {
             // Create file content
             FileContent mediaContent = new FileContent(mimeType, file);
 
-            // Set file permissions to make it publicly accessible
+            // Upload file
             com.google.api.services.drive.model.File uploadedFile = driveService.files()
                     .create(fileMetadata, mediaContent)
                     .setFields("id, webContentLink")
@@ -88,117 +112,68 @@ public class CourseService {
 
             driveService.permissions().create(uploadedFile.getId(), permission).execute();
 
-            // Return the direct download link
+            log.info("File uploaded successfully: {}", uploadedFile.getWebContentLink());
             return "https://drive.google.com/uc?export=view&id=" + uploadedFile.getId();
+        } catch (IOException e) {
+            log.error("IO error during file upload: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "File upload failed due to IO error", e);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to upload file to Google Drive: " + e.getMessage(), e);
+            log.error("Unexpected error during file upload: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error during file upload", e);
         }
     }
 
-
-    // Create Google Drive service
-    private Drive createDriveService() throws GeneralSecurityException, IOException {
-        String credentialsPath = getPathToGoogleCredentials();
-
-        GoogleCredential credential = GoogleCredential.fromStream(new FileInputStream(credentialsPath))
-                .createScoped(Collections.singleton(DriveScopes.DRIVE));
-
-        return new Drive.Builder(
-                GoogleNetHttpTransport.newTrustedTransport(),
-                JSON_FACTORY,
-                credential
-        ).setApplicationName("SellingCourse").build();
-    }
-
-    // Save MultipartFile to a temporary file and upload it to Google Drive
-//    private String saveMultipartFileToDrive(MultipartFile multipartFile, String mimeType) {
-//        if (multipartFile == null || multipartFile.isEmpty()) {
-//            return null;
-//        }
-//        try {
-//            // Create a temporary file
-//            File tempFile = File.createTempFile("upload-", "-" + multipartFile.getOriginalFilename());
-//            try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-//                fos.write(multipartFile.getBytes());
-//            }
-//
-//            // Upload file to Google Drive
-//            String fileUrl = uploadFileToDrive(tempFile, mimeType);
-//
-//            // Delete the temporary file
-//            tempFile.delete();
-//
-//            return fileUrl;
-//        } catch (IOException e) {
-//            throw new RuntimeException("Failed to process file: " + multipartFile.getOriginalFilename(), e);
-//        }
-//    }
+    // Save MultipartFile to Drive
     private String saveMultipartFileToDrive(MultipartFile multipartFile, String mimeType) {
         if (multipartFile == null || multipartFile.isEmpty()) {
+            log.warn("Attempted to upload an empty file");
             return null;
         }
+
         try {
-            // Create a temporary file with original file name
+            // Create temporary file
             String originalFilename = multipartFile.getOriginalFilename();
             File tempFile = File.createTempFile("upload-", "-" + (originalFilename != null ? originalFilename : "file"));
 
-            // Write multipart file content to temp file
+            // Write content to temp file
             try (FileOutputStream fos = new FileOutputStream(tempFile)) {
                 fos.write(multipartFile.getBytes());
             }
 
-            // Determine correct MIME type based on file extension
+            // Determine correct MIME type
             String actualMimeType = mimeType;
             if (originalFilename != null) {
-                String extension = originalFilename.toLowerCase();
-                if (extension.endsWith(".jpg") || extension.endsWith(".jpeg")) {
+                if (originalFilename.toLowerCase().endsWith(".jpg") || originalFilename.toLowerCase().endsWith(".jpeg")) {
                     actualMimeType = "image/jpeg";
-                } else if (extension.endsWith(".png")) {
+                } else if (originalFilename.toLowerCase().endsWith(".png")) {
                     actualMimeType = "image/png";
-                } else if (extension.endsWith(".mp4")) {
+                } else if (originalFilename.toLowerCase().endsWith(".mp4")) {
                     actualMimeType = "video/mp4";
                 }
             }
 
-            // Upload to Google Drive
+            // Upload file
             String fileUrl = uploadFileToDrive(tempFile, actualMimeType);
 
-            // Clean up temp file
+            // Delete temp file
             if (!tempFile.delete()) {
-                System.out.println("Warning: Temporary file could not be deleted");
+                log.warn("Temporary file could not be deleted: {}", tempFile.getAbsolutePath());
             }
 
             return fileUrl;
         } catch (IOException e) {
-            throw new RuntimeException("Failed to process file: " + multipartFile.getOriginalFilename(), e);
+            log.error("Failed to save MultipartFile: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to process file", e);
         }
     }
 
-
+    // Add course with files
     public Course addCourseWithFiles(String title, String description, BigDecimal price, Long teacherId, Long categoryId,
                                      MultipartFile thumbnail, MultipartFile video) {
         try {
-            // Upload thumbnail
-            String thumbnailUrl = null;
-            if (thumbnail != null && !thumbnail.isEmpty()) {
-                try {
-                    thumbnailUrl = saveMultipartFileToDrive(thumbnail, "image/jpeg");
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to upload thumbnai: " + e.getMessage(), e);
-                }
-            }
+            String thumbnailUrl = saveMultipartFileToDrive(thumbnail, "image/jpeg");
+            String videoUrl = saveMultipartFileToDrive(video, "video/mp4");
 
-            // Upload video
-            String videoUrl = null;
-            if (video != null && !video.isEmpty()) {
-                try {
-                    videoUrl = saveMultipartFileToDrive(video, "video/mp4");
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to upload video: " + e.getMessage(), e);
-                }
-            }
-
-            // Create new course
             Course course = new Course();
             course.setTitle(title);
             course.setDescription(description);
@@ -207,25 +182,17 @@ public class CourseService {
             course.setCategoryId(categoryId);
             course.setThumbnailUrl(thumbnailUrl);
             course.setVideoUrl(videoUrl);
-            course.setStatus(1); // Default status
+            course.setStatus(1);
 
-            try {
-                return courseRepository.save(course);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to save course to database: " + e.getMessage(), e);
-            }
-        } catch (RuntimeException e) {
-            // Log error for debugging
-            log.error("Error occurred while adding course: {}", e.getMessage(), e);
-            throw e; // Rethrow to preserve original exception details
+            return courseRepository.save(course);
+        } catch (ResponseStatusException e) {
+            log.error("Error while adding course: {}", e.getMessage(), e);
+            throw e;
         } catch (Exception e) {
-            // Handle unexpected exceptions
-            log.error("Unexpected error occurred: {}", e.getMessage(), e);
-            throw new RuntimeException("An unexpected error occurred: " + e.getMessage(), e);
+            log.error("Unexpected error while adding course: {}", e.getMessage(), e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error while adding course", e);
         }
     }
-
-
     // Update course with files
     public Course updateCourseWithFiles(Long id, String title, String description, BigDecimal price, Long teacherId,
                                         Long categoryId, MultipartFile thumbnail, MultipartFile video) {

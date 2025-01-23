@@ -3,6 +3,8 @@ package org.example.sellingcourese.Controller;
 
 import org.example.sellingcourese.Model.Course;
 import org.example.sellingcourese.Service.CourseService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -12,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -22,7 +25,7 @@ import java.util.Map;
 @CrossOrigin("https://course-ui.vercel.app")
 @RequestMapping("/public/courses")
 public class CourseController {
-
+    private static final Logger log = LoggerFactory.getLogger(CourseController.class);
     @Autowired
     private CourseService courseService;
 
@@ -43,7 +46,7 @@ public class CourseController {
             @RequestParam(value = "video", required = false) MultipartFile video) {
 
         try {
-            // Kiểm tra dữ liệu đầu vào
+            // Validate input fields
             if (title == null || title.isBlank()) {
                 return ResponseEntity.badRequest().body(createErrorResponse("Title is required."));
             }
@@ -60,33 +63,37 @@ public class CourseController {
                 return ResponseEntity.badRequest().body(createErrorResponse("Category ID is required."));
             }
 
-            // Log thông tin file upload (nếu có)
-            if (thumbnail != null) {
-                System.out.println("Received thumbnail: " + thumbnail.getOriginalFilename());
+            // Log information for file uploads
+            log.info("Received request to add course with title: {}", title);
+            if (thumbnail != null && !thumbnail.isEmpty()) {
+                log.info("Thumbnail received: {}", thumbnail.getOriginalFilename());
             } else {
-                System.out.println("No thumbnail file received");
+                log.info("No thumbnail file received");
+            }
+            if (video != null && !video.isEmpty()) {
+                log.info("Video received: {}", video.getOriginalFilename());
+            } else {
+                log.info("No video file received");
             }
 
-            if (video != null) {
-                System.out.println("Received video: " + video.getOriginalFilename());
-            } else {
-                System.out.println("No video file received");
-            }
-
-            // Gọi service để thêm khóa học
+            // Call service to add course
             Course course = courseService.addCourseWithFiles(title, description, price, teacherId, categoryId, thumbnail, video);
+            log.info("Course added successfully with ID: {}", course.getId());
             return ResponseEntity.ok(course);
 
         } catch (RuntimeException e) {
-            // Lỗi logic ứng dụng (vd: upload thất bại, lưu database thất bại)
+            // Application-specific error handling (e.g., upload failure, database error)
+            log.error("Application error occurred: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("An error occurred: " + e.getMessage()));
+                    .body(createErrorResponse("An error occurred while processing your request: " + e.getMessage()));
         } catch (Exception e) {
-            // Lỗi không mong muốn
+            // Unexpected error handling
+            log.error("Unexpected error occurred: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Unexpected error occurred: " + e.getMessage()));
+                    .body(createErrorResponse("An unexpected error occurred. Please try again later."));
         }
     }
+
 
     // Hàm tạo lỗi chi tiết
     private Map<String, Object> createErrorResponse(String message) {

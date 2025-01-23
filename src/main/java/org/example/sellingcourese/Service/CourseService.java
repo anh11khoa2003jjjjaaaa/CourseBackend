@@ -38,7 +38,7 @@ import org.slf4j.LoggerFactory;
 public class CourseService {
     private static final Logger log = LoggerFactory.getLogger(CourseService.class);
     private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
-    private static final String FOLDER_ID = "1SarwgB_52SplTKxlmCvL-ilBwMOKR5Ta"; // Folder ID on Google Drive
+    private static final String FOLDER_ID = "1SarwgB_52SplTKxlmCvL-ilBwMOKR5Ta"; // Correct Folder ID
     private static final String CREDENTIALS_FILE_PATH = "D:\\Project\\Nam4_hk1\\SellingCourese\\res.json";
 
     @Autowired

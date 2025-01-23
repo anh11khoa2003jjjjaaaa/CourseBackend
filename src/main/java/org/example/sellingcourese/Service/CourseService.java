@@ -43,6 +43,9 @@ public class CourseService {
 
     private final String IMGUR_API_URL = "https://api.imgur.com/3/image";
 
+    public List<Course> getAllCourses() {
+        return courseRepository.findAll();
+    }
     // Upload file lên Imgur
     private String uploadToImgur(MultipartFile file) {
         if (file == null || file.isEmpty()) {

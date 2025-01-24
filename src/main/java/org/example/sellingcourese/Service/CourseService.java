@@ -14,6 +14,8 @@ import org.example.sellingcourese.repository.CourseRepository;
 import org.example.sellingcourese.repository.OrderDetailRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -54,12 +56,21 @@ public class CourseService {
         return courseRepository.findAll();
     }
     // Helper method to get Google credentials path
-    private String getPathToGoogleCredentials() {
+//    private String getPathToGoogleCredentials() {
+//        try {
+//            String currentDirectory = System.getProperty("user.dir");
+//            Path filePath = Paths.get(currentDirectory, CREDENTIALS_FILE_PATH);
+//            return filePath.toString();
+//        } catch (Exception e) {
+//            log.error("Failed to resolve Google credentials path: {}", e.getMessage(), e);
+//            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error resolving credentials path", e);
+//        }
+//    }
+    public String getPathToGoogleCredentials() {
         try {
-            String currentDirectory = System.getProperty("user.dir");
-            Path filePath = Paths.get(currentDirectory, CREDENTIALS_FILE_PATH);
-            return filePath.toString();
-        } catch (Exception e) {
+            Resource resource = new ClassPathResource("res.json");
+            return resource.getFile().getAbsolutePath();
+        } catch (IOException e) {
             log.error("Failed to resolve Google credentials path: {}", e.getMessage(), e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error resolving credentials path", e);
         }

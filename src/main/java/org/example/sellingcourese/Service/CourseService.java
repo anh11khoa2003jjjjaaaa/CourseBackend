@@ -22,14 +22,12 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.List;
@@ -69,7 +67,23 @@ public class CourseService {
     public String getPathToGoogleCredentials() {
         try {
             Resource resource = new ClassPathResource("res.json");
-            return resource.getFile().getAbsolutePath();
+
+            // Kiểm tra xem file có tồn tại không
+            if (!resource.exists()) {
+                throw new FileNotFoundException("File res.json not found in classpath");
+            }
+
+            // Nếu chạy trong JAR, sử dụng InputStream
+            if (resource.isFile()) {
+                return resource.getFile().getAbsolutePath();
+            } else {
+                // Tạo một file tạm thời và sao chép nội dung
+                File tempFile = File.createTempFile("res", ".json");
+                try (InputStream inputStream = resource.getInputStream()) {
+                    Files.copy(inputStream, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+                return tempFile.getAbsolutePath();
+            }
         } catch (IOException e) {
             log.error("Failed to resolve Google credentials path: {}", e.getMessage(), e);
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error resolving credentials path", e);
